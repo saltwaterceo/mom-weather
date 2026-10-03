@@ -181,7 +181,13 @@ table.feel td.daystart { }
   padding: 22px 8px 18px; min-height: 170px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
   transition: transform .08s;
 }
-.choice:hover { border-color: var(--accent); transform: translateY(-2px); }
+@media (hover: hover) and (pointer: fine) {
+  .choice:hover { border-color: var(--accent); transform: translateY(-2px); }
+}
+.choice:focus:not(:focus-visible) { outline: none; }
+.qstep { animation: qin .28s ease-out; }
+@keyframes qin { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .qstep { animation: none; } }
 .choice .n { font-size: 56px; font-weight: 800; line-height: 1; width: 84px; height: 84px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
 .choice .w { font-size: 21px; font-weight: 700; text-align: center; line-height: 1.2; }
 .choice.picked { border-color: var(--ink); }
@@ -706,16 +712,17 @@ function drawStep() {
   const top = `<div class="ov-top">${stepsDots()}<button class="ov-close" id="ovClose">Close</button></div>`;
   if (CI.step < QUESTIONS.length) {
     const q = QUESTIONS[CI.step], picked = CI.answers[q.id];
-    ov.innerHTML = top + `<div class="q">${q.q}</div><div class="qsub">${q.sub}</div>
+    if (document.activeElement) document.activeElement.blur();
+    ov.innerHTML = top + `<div class="qstep"><div class="q">${q.q}</div><div class="qsub">${q.sub}</div>
       <div class="choices" role="group" aria-label="${esc(q.q)}">` +
       q.labels.map((w, i) => { const n = i + 1, col = scoreVar(n);
         return `<button class="choice${picked === n ? " picked" : ""}" data-n="${n}">
           <span class="n" style="background:${col.bg};color:${col.ink}">${n}</span><span class="w">${w}</span></button>`; }).join("") +
-      `</div><div class="ends"><span>← ${q.ends[0]}</span><span>${q.ends[1]} →</span></div>
+      `</div><div class="ends"><span>← ${q.ends[0]}</span><span>${q.ends[1]} →</span></div></div>
       <div class="ov-nav">${CI.step > 0 ? `<button class="backbtn" id="backBtn">← Back</button>` : "<span></span>"}
       <span class="hint">Question ${CI.step + 1} of ${QUESTIONS.length}</span></div>`;
     ov.querySelectorAll(".choice").forEach(b => b.onclick = () => pick(Number(b.dataset.n)));
-    const first = ov.querySelector(".choice"); if (first) first.focus({ preventScroll: true });
+    if (lastInputWasKey) { const first = ov.querySelector(".choice"); if (first) first.focus({ preventScroll: true }); }
   } else if (CI.step === QUESTIONS.length) {
     ov.innerHTML = top + `<div class="q">Anything else about today?</div>
       <div class="qsub">This is optional. Tap any that fit, or type a few words.</div>
@@ -732,10 +739,14 @@ function drawStep() {
   const bb = $("backBtn"); if (bb) bb.onclick = () => { CI.step--; drawStep(); };
   $("ovClose").onclick = closeCheckin;
 }
+let lastInputWasKey = false, advancing = false;
+document.addEventListener("pointerdown", () => { lastInputWasKey = false; }, true);
 function pick(n) {
+  if (advancing) return;              // ignore a double-tap while moving to the next question
+  advancing = true;
   const q = QUESTIONS[CI.step]; CI.answers[q.id] = n;
   $("ov").querySelectorAll(".choice").forEach(b => b.classList.toggle("picked", Number(b.dataset.n) === n));
-  setTimeout(() => { CI.step++; drawStep(); }, 260);
+  setTimeout(() => { advancing = false; if (!CI) return; CI.step++; drawStep(); }, 260);
 }
 async function submitCheckin() {
   const btn = $("saveBtn"); btn.disabled = true; btn.textContent = "Saving…";
@@ -754,6 +765,7 @@ async function submitCheckin() {
 }
 document.addEventListener("keydown", (e) => {
   if (!CI) return;
+  lastInputWasKey = true;
   if (e.key === "Escape") closeCheckin();
   if (CI.step < QUESTIONS.length && /^[1-5]$/.test(e.key)) pick(Number(e.key));
 });
