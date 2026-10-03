@@ -197,8 +197,10 @@ table.feel td.daystart { }
 .hint { color: var(--muted); font-size: 17px; }
 textarea.note {
   width: 100%; margin-top: 28px; font: inherit; font-size: 26px; padding: 18px; border-radius: 14px;
-  border: 2px solid var(--axis); background: var(--surface); color: var(--ink); min-height: 140px; resize: vertical;
+  border: 2px solid var(--axis); background: var(--surface); color: var(--ink); min-height: 320px; resize: vertical;
+  line-height: 1.45; overflow-y: auto;
 }
+textarea.note:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
 .chip { background: var(--surface); border: 2px solid var(--axis); color: var(--ink); border-radius: 999px; font-size: 21px; padding: 10px 20px; }
 .chip.on { background: var(--accent-soft); border-color: var(--accent); font-weight: 700; }
@@ -315,7 +317,16 @@ const QUESTIONS = [
   { id: "feet",       short: "Feet",       q: "How are your feet?",        sub: "Any tingling or pins-and-needles?",
     labels: ["Lots of tingling", "Quite a bit", "Some tingling", "A little", "No tingling"], ends: ["Lots of tingling", "No tingling"] }
 ];
-const NOTE_CHIPS = ["Slept poorly", "Slept well", "Took a nap", "Busy day", "Stayed in", "Had a fall or near-fall", "New or missed medicine"];
+const NOTE_CHIPS = {
+  AM: ["Slept well", "Slept poorly", "Up a lot in the night", "Dizzy getting out of bed", "Stiff or achy", "Headache",
+       "New or missed medicine", "Had a fall or near-fall"],
+  PM: ["Quiet day", "Busy day", "Stayed in", "Got out and about", "Went for a walk", "Took a nap", "Tired", "Headache",
+       "New or missed medicine", "Had a fall or near-fall"]
+};
+const NOTE_PROMPT = {
+  AM: ["Anything else about last night or this morning?", "Tap any that fit, or type a few words. This part is optional."],
+  PM: ["Anything else about today?", "Tap any that fit, or type a few words. This part is optional."]
+};
 const SCORE_WORDS = ["", "Rough", "Not great", "So-so", "Good", "Great"];
 
 /* =========================================================
@@ -729,16 +740,20 @@ function drawStep() {
     ov.querySelectorAll(".choice").forEach(b => b.onclick = () => pick(Number(b.dataset.n)));
     if (lastInputWasKey) { const first = ov.querySelector(".choice"); if (first) first.focus({ preventScroll: true }); }
   } else if (CI.step === QUESTIONS.length) {
-    ov.innerHTML = top + `<div class="q">Anything else about today?</div>
-      <div class="qsub">This is optional. Tap any that fit, or type a few words.</div>
-      <div class="chips">` + NOTE_CHIPS.map(c => `<button class="chip${CI.chips.has(c) ? " on" : ""}" data-c="${esc(c)}">${c}</button>`).join("") + `</div>
-      <textarea class="note" id="noteBox" placeholder="Type here if you like…">${esc(CI.note)}</textarea>
+    const sl = slotOf(Date.now());
+    ov.innerHTML = top + `<div class="qstep"><div class="q">${NOTE_PROMPT[sl][0]}</div>
+      <div class="qsub">${NOTE_PROMPT[sl][1]}</div>
+      <div class="chips">` + NOTE_CHIPS[sl].map(c => `<button class="chip${CI.chips.has(c) ? " on" : ""}" data-c="${esc(c)}">${c}</button>`).join("") + `</div>
+      <textarea class="note" id="noteBox" rows="7" placeholder="Type here if you like…">${esc(CI.note)}</textarea></div>
       <div class="ov-nav"><button class="backbtn" id="backBtn">← Back</button>
       <button class="bigbtn" id="saveBtn">Save my check-in</button></div>`;
     ov.querySelectorAll(".chip").forEach(b => b.onclick = () => {
       const c = b.dataset.c; CI.chips.has(c) ? CI.chips.delete(c) : CI.chips.add(c); b.classList.toggle("on");
     });
-    $("noteBox").oninput = (e) => CI.note = e.target.value;
+    const nb = $("noteBox");
+    const grow = () => { nb.style.height = "auto"; nb.style.height = Math.max(nb.scrollHeight + 4, 320) + "px"; };
+    nb.oninput = (e) => { CI.note = e.target.value; grow(); };
+    grow();
     $("saveBtn").onclick = submitCheckin;
   }
   const bb = $("backBtn"); if (bb) bb.onclick = () => { CI.step--; drawStep(); };
