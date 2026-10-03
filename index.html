@@ -205,6 +205,11 @@ textarea.note {
 .thanks { text-align: center; margin-top: 70px; }
 .thanks .big { font-size: 60px; font-weight: 800; }
 .thanks .avg { font-size: 30px; margin-top: 16px; color: var(--ink-2); }
+.thanks .cheer { max-width: 760px; margin: 22px auto 0; }
+.thanks .cheer p { font-size: 30px; line-height: 1.35; margin: 0 0 16px; }
+.thanks .cheer p:first-child { font-size: 36px; font-weight: 700; }
+.thanks .small { font-size: 19px; color: var(--muted); margin: 10px 0 0; }
+@media (max-width: 820px) { .thanks .cheer p { font-size: 22px; } .thanks .cheer p:first-child { font-size: 26px; } .thanks .big { font-size: 40px; } }
 
 @media (max-width: 820px) {
   body { font-size: 18px; }
@@ -753,16 +758,97 @@ async function submitCheckin() {
   const note = [...CI.chips].concat(CI.note.trim() ? [CI.note.trim()] : []).join("; ");
   const payload = { answers: CI.answers, note, clientTs: Date.now() };
   const avg = overallOf(CI.answers);
-  let msg = "Saved. Thank you!";
+  const prior = STATE.checkins.slice();          // check-ins before this one
+  let offline = false;
   try { await saveCheckin(payload); }
-  catch (e) { queuePending(payload); msg = "Saved on this computer. It will send the next time you open this page."; }
-  $("ov").innerHTML = `<div class="thanks"><div class="big"><span class="check">✓</span> ${msg.split(".")[0]}.</div>
-    <div class="avg">Today you're a <b>${avg.toFixed(1)} out of 5</b> — ${SCORE_WORDS[Math.round(avg)].toLowerCase()}.</div>
-    <div class="avg" style="font-size:22px">${msg.includes("computer") ? msg : ""}</div>
-    <div style="margin-top:44px"><button class="bigbtn" id="doneBtn">Back to my page</button></div></div>`;
+  catch (e) { queuePending(payload); offline = true; }
+  const m = encouragement(avg, prior);
+  $("ov").innerHTML = `<div class="thanks">
+    <div class="big"><span class="check">✓</span> ${m.headline}</div>
+    <div class="cheer">${m.lines.map(l => `<p>${l}</p>`).join("")}</div>
+    ${offline ? `<p class="small">Saved on this computer. It will send the next time you open this page.</p>` : ""}
+    <p class="small">Today's check-in: ${avg.toFixed(1)} out of 5</p>
+    <div style="margin-top:36px"><button class="bigbtn" id="doneBtn">Back to my page</button></div></div>`;
   $("doneBtn").onclick = () => { closeCheckin(); refresh(); };
   $("doneBtn").focus();
 }
+/* ---- Post check-in encouragement: always warm, never a grade; morning vs evening ---- */
+const CHEER = {
+  AM: {
+    great: ["What a lovely way to start the day! Enjoy every bit of it.",
+            "You're starting the day strong. Make the most of it!",
+            "A great morning! Here's hoping the whole day follows suit."],
+    good:  ["A good start to the day. That's worth smiling about.",
+            "Nice and steady this morning. Well done.",
+            "That's a solid morning. Here's to a good day ahead."],
+    mid:   ["An in-between morning, and you showed up for it. That counts.",
+            "Some mornings are slow to warm up. The day is still young.",
+            "Not every morning starts great, and that's okay. Thank you for checking in."],
+    low:   ["A rough start, and you checked in anyway. That takes grit.",
+            "Thank you for checking in on a tough morning. Go easy on yourself today.",
+            "Hard mornings happen. Take today one gentle step at a time."]
+  },
+  PM: {
+    great: ["What a wonderful day! Rest well tonight.",
+            "Ending the day on a high note. Sleep well!",
+            "You had a great day, and that's so good to see."],
+    good:  ["A good day, and that's worth celebrating.",
+            "Nice! Steady and strong today. Rest up tonight.",
+            "That's a solid day. Well done, you."],
+    mid:   ["An in-between day, and you got through it. That counts.",
+            "Not every day is a great one, and that's okay. Rest well tonight.",
+            "Middle-of-the-road days are part of the picture too. Thanks for writing it down."],
+    low:   ["A hard day, and you checked in anyway. That takes grit.",
+            "Thank you for checking in after a tough day. Tomorrow is a brand-new start.",
+            "Be gentle with yourself tonight. A good rest can make a real difference."]
+  }
+};
+const HEADLINES = {
+  AM: ["Morning check-in done!", "Good morning, and thank you!", "Thank you! Morning check-in saved."],
+  PM: ["Evening check-in done!", "Thank you! Evening check-in saved.", "All set for tonight. Thank you!"]
+};
+const LOW_TIP = {
+  AM: "Take your time getting up, and keep a hand on something steady.",
+  PM: "Take it slow tonight, and keep a hand on something steady. A night light helps too."
+};
+const pickOne = (a) => a[Math.floor(Math.random() * a.length)];
+function ordinal(n) { const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+
+function encouragement(avg, prior) {
+  const now = Date.now(), slot = slotOf(now);
+  const band = avg >= 4.5 ? "great" : avg >= 3.5 ? "good" : avg >= 2.5 ? "mid" : "low";
+  const lines = [pickOne(CHEER[slot][band])];
+
+  // Only ever compare upward, and name the last check-in naturally
+  const last = prior.length ? prior[prior.length - 1] : null;
+  const lastO = last ? (last.overall != null ? last.overall : overallOf(last)) : null;
+  if (lastO != null) {
+    const lastSlot = last.slot || slotOf(last.ts);
+    const sameDay = dayKey(last.ts) === dayKey(now), yesterday = dayKey(last.ts) === dayKey(now - 24 * H);
+    const when = sameDay && lastSlot === "AM" && slot === "PM" ? "this morning"
+      : yesterday && lastSlot === "PM" && slot === "AM" ? "last night"
+      : "your last check-in";
+    if (avg >= lastO + 0.5) lines.push(`That's better than ${when}!`);
+    else if ((band === "great" || band === "good") && Math.abs(avg - lastO) < 0.5) lines.push(`Holding steady since ${when}. Nice.`);
+  }
+
+  // On harder days, gently connect it to the weather if the pressure is moving
+  const P = STATE.pressure;
+  if (P && (band === "low" || band === "mid")) {
+    const d3 = P.current - interp(P.series, now - 3 * H), d24 = P.current - interp(P.series, now - 24 * H);
+    if (Math.abs(d3) >= CONFIG.fastAtOrAbove || Math.abs(d24) >= CONFIG.bigSwing24h)
+      lines.push(`The air pressure has been ${d24 < 0 ? "dropping" : "climbing"} quite a bit ${slot === "AM" ? "since yesterday" : "today"}. This check-in helps us see whether the weather is part of it.`);
+  }
+  if (band === "low") lines.push(LOW_TIP[slot]);
+
+  // Progress + see-you-next
+  const thisWeek = prior.filter(c => c.ts >= now - 7 * 24 * H).length + 1;
+  const progress = thisWeek === 1 ? "First check-in of the week. Great start!"
+    : `That's your ${ordinal(thisWeek)} check-in this week. Every one makes the picture clearer.`;
+  lines.push(progress + (slot === "AM" ? " See you this evening!" : " See you in the morning!"));
+  return { headline: pickOne(HEADLINES[slot]), lines };
+}
+
 document.addEventListener("keydown", (e) => {
   if (!CI) return;
   lastInputWasKey = true;
