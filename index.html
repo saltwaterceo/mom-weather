@@ -187,6 +187,11 @@ table.feel col.rowc { width: 130px; }
 table.feel th { font-size: 17px; font-weight: 700; color: var(--ink-2); text-align: center; padding: 2px 0; }
 table.feel th.today { color: var(--ink); }
 table.feel th.rowh { text-align: left; font-size: 19px; color: var(--ink); white-space: nowrap; padding-right: 10px; }
+/* Freeze the label column so the row names stay visible while scrolling sideways */
+table.feel th.rowh, table.feel thead th:first-child {
+  position: sticky; left: 0; z-index: 2; background: var(--surface);
+  box-shadow: 4px 0 0 var(--surface), 8px 0 8px -4px rgba(0,0,0,.12);
+}
 table.feel tr.overall th.rowh { font-weight: 800; }
 table.feel th.ampm { font-size: 14px; font-weight: 600; color: var(--muted); }
 table.feel td {
@@ -231,6 +236,9 @@ table.feel td.daystart { }
 @keyframes qin { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .qstep { animation: none; } }
 .choice .n { font-size: 56px; font-weight: 800; line-height: 1; width: 84px; height: 84px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.scalenote { display: flex; flex-wrap: wrap; gap: 12px 28px; margin-top: 22px; padding: 16px 20px; border-radius: 14px; background: var(--surface); border: 2px solid var(--grid); font-size: 22px; }
+.scalenote span { display: inline-flex; align-items: center; gap: 12px; }
+.scalenote b { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; font-size: 22px; flex: none; }
 .choice .w { font-size: 21px; font-weight: 700; text-align: center; line-height: 1.2; }
 .choice.picked { border-color: var(--ink); }
 .ends { display: flex; justify-content: space-between; font-size: 20px; color: var(--ink-2); margin-top: 12px; font-weight: 600; }
@@ -276,6 +284,9 @@ textarea.note:focus { outline: none; border-color: var(--accent); box-shadow: 0 
   .mrow .mword { grid-column: 1 / -1; font-size: 18px; }
   .mname { font-size: 19px; }
   .quote { font-size: 21px; }
+  table.feel col.rowc { width: 112px; }
+  table.feel th.rowh { font-size: 17px; }
+  .scalenote { font-size: 18px; padding: 12px 14px; }
   .trends li { font-size: 19px; }
   .wxkey { font-size: 17px; }
 }
@@ -406,7 +417,10 @@ const QUESTIONS = [
   { id: "clarity",    short: "Clear head", q: "How clear is your head?",   sub: "Foggy and fuzzy, or sharp and clear?",
     labels: ["Very foggy", "Foggy", "A little fuzzy", "Mostly clear", "Crystal clear"], ends: ["Very foggy", "Crystal clear"] },
   { id: "feet",       short: "Feet",       q: "How are your feet?",        sub: "Any tingling or pins-and-needles?",
-    labels: ["Lots of tingling", "Quite a bit", "Some tingling", "A little", "No tingling"], ends: ["Lots of tingling", "No tingling"] }
+    labels: ["Lots of tingling", "Quite a bit", "Some tingling", "A little", "No tingling"], ends: ["Lots of tingling", "No tingling"] },
+  { id: "ears",       short: "Ears",       q: "How clear do your ears feel?", sub: "Any blocked, plugged, or full feeling, like on an airplane?",
+    scale: ["Totally blocked or plugged. Sounds are very muffled.", "Completely clear. You're hearing normally."],
+    labels: ["Totally blocked", "Mostly blocked", "Muffled", "Mostly clear", "Completely clear"], ends: ["Totally blocked", "Completely clear"] }
 ];
 const NOTE_CHIPS = {
   AM: ["Slept well", "Slept poorly", "Up a lot in the night", "Dizzy getting out of bed", "Stiff or achy", "Headache",
@@ -592,7 +606,7 @@ function renderBanner() {
       <small>You checked in at ${t}. ${slot === "AM" ? "See you this evening." : "See you in the morning."}</small></div></section>`;
   } else {
     html = `<section class="card banner due"><div class="msg">Time for your ${word} check-in
-      <small>Five quick questions. It takes about 30 seconds.</small></div>
+      <small>Six quick questions. It takes about 30 seconds.</small></div>
       <button class="bigbtn" id="startBtn">Start check-in</button></section>`;
   }
   $("bannerSlot").innerHTML = html;
@@ -832,19 +846,21 @@ const TREND_WORDS = {
   steadiness: { up: "You've been feeling steadier", down: "You've been feeling a bit more wobbly" },
   strength:   { up: "Your strength has been improving", down: "You've been feeling a little weaker" },
   clarity:    { up: "Your head has been clearer", down: "Your head has been a bit foggier" },
-  feet:       { up: "Your feet have been tingling less", down: "Your feet have been tingling more" }
+  feet:       { up: "Your feet have been tingling less", down: "Your feet have been tingling more" },
+  ears:       { up: "Your ears have been feeling clearer", down: "Your ears have been feeling more blocked" }
 };
 const GOOD_WORDS = {
   balance: "Your balance has been consistently good", steadiness: "You've been consistently steady on your feet",
   strength: "Your strength has been consistently good", clarity: "Your head has been consistently clear",
-  feet: "Your feet have been consistently calm"
+  feet: "Your feet have been consistently calm", ears: "Your ears have been consistently clear"
 };
 const PATTERN = {
   balance:    (b, w) => `Your balance tends to be better in the ${b} than in the ${w}.`,
   steadiness: (b, w) => `You tend to feel steadier in the ${b} than in the ${w}.`,
   strength:   (b, w) => `You tend to feel stronger in the ${b} than in the ${w}.`,
   clarity:    (b, w) => `Your head tends to be clearer in the ${b} than in the ${w}.`,
-  feet:       (b, w) => `Your feet tend to tingle less in the ${b} than in the ${w}.`
+  feet:       (b, w) => `Your feet tend to tingle less in the ${b} than in the ${w}.`,
+  ears:       (b, w) => `Your ears tend to feel clearer in the ${b} than in the ${w}.`
 };
 const MEANINGFUL = 0.6;   // points on the 1–5 scale
 const valOf = (c, id) => id === "overall" ? (c.overall != null && c.overall !== "" ? Number(c.overall) : overallOf(c)) : Number(c[id]);
@@ -955,7 +971,7 @@ function renderGrid() {
     uniq.forEach(d => ["AM", "PM"].forEach(sl => {
       const c = cell[d + "|" + sl];
       let v = c ? (q.id === "overall" ? (c.overall != null ? c.overall : overallOf(c)) : Number(c[q.id])) : null;
-      if (v == null || isNaN(v)) { h += `<td aria-label="no check-in">·</td>`; return; }
+      if (v == null || isNaN(v) || v < 1) { h += `<td aria-label="no answer">·</td>`; return; }
       const col = scoreVar(v);
       const shown = q.id === "overall" ? v.toFixed(1).replace(/\.0$/, "") : v;
       const title = `${d} ${sl} — ${q.short}: ${shown}${c.note ? " — " + c.note : ""}`;
@@ -1002,6 +1018,7 @@ function drawStep() {
     const q = QUESTIONS[CI.step], picked = CI.answers[q.id];
     if (document.activeElement) document.activeElement.blur();
     ov.innerHTML = top + `<div class="qstep"><div class="q">${q.q}</div><div class="qsub">${q.sub}</div>
+      ${q.scale ? `<div class="scalenote"><span><b style="background:var(--s1);color:var(--s1-ink)">1</b>${q.scale[0]}</span><span><b style="background:var(--s5);color:var(--s5-ink)">5</b>${q.scale[1]}</span></div>` : ""}
       <div class="choices" role="group" aria-label="${esc(q.q)}">` +
       q.labels.map((w, i) => { const n = i + 1, col = scoreVar(n);
         return `<button class="choice${picked === n ? " picked" : ""}" data-n="${n}">
