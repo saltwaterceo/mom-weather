@@ -182,7 +182,7 @@ button { font: inherit; cursor: pointer; }
 .weeksum { font-size: 22px; margin-top: 12px; }
 .weeksum b { font-weight: 800; }
 .gridwrap { overflow-x: auto; margin-top: 16px; }
-table.feel { border-collapse: separate; border-spacing: 4px; width: 100%; min-width: 760px; table-layout: fixed; }
+table.feel { border-collapse: separate; border-spacing: 4px; width: 100%; min-width: 600px; table-layout: fixed; }
 table.feel col.rowc { width: 130px; }
 table.feel th { font-size: 17px; font-weight: 700; color: var(--ink-2); text-align: center; padding: 2px 0; }
 table.feel th.today { color: var(--ink); }
@@ -220,7 +220,8 @@ table.feel td.daystart { }
 .steps i.on { background: var(--accent); }
 .steps i.done { background: var(--ink-2); }
 .ov-close { background: none; border: 2px solid var(--axis); color: var(--ink); border-radius: 12px; font-size: 19px; padding: 10px 18px; }
-.q { font-size: 52px; font-weight: 800; line-height: 1.12; margin-top: 48px; }
+.q { font-size: 52px; font-weight: 800; line-height: 1.12; margin-top: 10px; }
+.eyebrow { margin-top: 40px; font-size: 20px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; }
 .qsub { font-size: 26px; color: var(--ink-2); margin-top: 12px; }
 .choices { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-top: 40px; }
 .choice {
@@ -400,7 +401,9 @@ const CONFIG = {
   lat: 36.2081, lon: -86.2911,
   tz: "America/Chicago",
   apiUrl: "https://script.google.com/macros/s/AKfycbxBaq4FiJLNX1-WQKiZBGPF74cT0iOVQdanBBXvuYJmR9slvLmzfA1Z1qPFS59un7285Q/exec",   // Apps Script Web App URL. Empty = demo mode.
-  morningEndsHour: 14,               // check-ins before 2pm count as "morning"
+  morningEndsHour: 14,               // only used to label older morning check-ins
+  checkinOpensHour: 17,              // from 5pm on, the page says "time for tonight's check-in"
+  reminderTime: "8 PM",
   // How fast is "fast"? (inches of mercury per 3 hours)
   steadyBelow: 0.02,
   fastAtOrAbove: 0.06,
@@ -408,30 +411,24 @@ const CONFIG = {
 };
 
 const QUESTIONS = [
-  { id: "balance",    short: "Balance",    q: "How is your balance?",      sub: "When you stand up or walk around.",
+  { id: "balance",    short: "Balance",    q: "How was your balance today?",      sub: "When you stood up or walked around.",
     labels: ["Very poor", "Poor", "Okay", "Good", "Very good"], ends: ["Very poor", "Very good"] },
-  { id: "steadiness", short: "Steadiness", q: "How steady do you feel?",   sub: "Any wobbly, woozy, or off-kilter feeling?",
+  { id: "steadiness", short: "Steadiness", q: "How steady did you feel today?",   sub: "Any wobbly, woozy, or off-kilter feeling?",
     labels: ["Very wobbly", "Wobbly", "A little wobbly", "Mostly steady", "Rock steady"], ends: ["Very wobbly", "Rock steady"] },
-  { id: "strength",   short: "Strength",   q: "How strong do you feel?",   sub: "Your legs, and your body overall.",
+  { id: "strength",   short: "Strength",   q: "How strong did you feel today?",   sub: "Your legs, and your body overall.",
     labels: ["Very weak", "Weak", "Okay", "Strong", "Very strong"], ends: ["Very weak", "Very strong"] },
-  { id: "clarity",    short: "Clear head", q: "How clear is your head?",   sub: "Foggy and fuzzy, or sharp and clear?",
+  { id: "clarity",    short: "Clear head", q: "How clear was your head today?",   sub: "Foggy and fuzzy, or sharp and clear?",
     labels: ["Very foggy", "Foggy", "A little fuzzy", "Mostly clear", "Crystal clear"], ends: ["Very foggy", "Crystal clear"] },
-  { id: "feet",       short: "Feet",       q: "How are your feet?",        sub: "Any tingling or pins-and-needles?",
+  { id: "feet",       short: "Feet",       q: "How were your feet today?",        sub: "Any tingling or pins-and-needles?",
     labels: ["Lots of tingling", "Quite a bit", "Some tingling", "A little", "No tingling"], ends: ["Lots of tingling", "No tingling"] },
-  { id: "ears",       short: "Ears",       q: "How clear do your ears feel?", sub: "Any blocked, plugged, or full feeling, like on an airplane?",
-    scale: ["Totally blocked or plugged. Sounds are very muffled.", "Completely clear. You're hearing normally."],
+  { id: "ears",       short: "Ears",       q: "How clear did your ears feel today?", sub: "Any blocked, plugged, or full feeling, like on an airplane?",
+    scale: ["Totally blocked or plugged. Sounds were very muffled.", "Completely clear. You heard normally."],
     labels: ["Totally blocked", "Mostly blocked", "Muffled", "Mostly clear", "Completely clear"], ends: ["Totally blocked", "Completely clear"] }
 ];
-const NOTE_CHIPS = {
-  AM: ["Slept well", "Slept poorly", "Up a lot in the night", "Dizzy getting out of bed", "Stiff or achy", "Headache",
-       "New or missed medicine", "Had a fall or near-fall"],
-  PM: ["Quiet day", "Busy day", "Stayed in", "Got out and about", "Went for a walk", "Took a nap", "Tired", "Headache",
-       "New or missed medicine", "Had a fall or near-fall"]
-};
-const NOTE_PROMPT = {
-  AM: ["Anything else about last night or this morning?", "Tap any that fit, or type a few words. This part is optional."],
-  PM: ["Anything else about today?", "Tap any that fit, or type a few words. This part is optional."]
-};
+// One check-in a day, in the evening, looking back on the whole day.
+const NOTE_PROMPT = ["Anything else about today?", "Tap any that fit, or type a few words. This part is optional."];
+const NOTE_CHIPS = ["Slept well last night", "Slept poorly last night", "Quiet day", "Busy day", "Got out and about", "Went for a walk",
+                    "Took a nap", "Tired", "Headache", "Dizzy getting up", "New or missed medicine", "Had a fall or near-fall"];
 const SCORE_WORDS = ["", "Rough", "Not great", "So-so", "Good", "Great"];
 
 /* =========================================================
@@ -455,6 +452,7 @@ const fHour = new Intl.DateTimeFormat("en-US", { timeZone: CONFIG.tz, hour: "num
 const dayKey = (t) => fDayKey.format(new Date(t));
 const hourOf = (t) => parseInt(fHour.format(new Date(t)), 10) % 24;
 const slotOf = (t) => hourOf(t) < CONFIG.morningEndsHour ? "AM" : "PM";
+const ciDay = (t) => dayKey(t - 4 * H);   // check-in "day": anything before 4am counts toward the day before
 const sign = (v) => v > 0 ? "+" : v < 0 ? "−" : "";
 const f2 = (v) => Math.abs(v).toFixed(2);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -561,7 +559,7 @@ function demoPressure() {
 function makeDemoCheckins() {
   const r = rng(42), out = [], ps = demoPressure().series, now = Date.now();
   for (let d = 14; d >= 0; d--) {
-    for (const hr of [9.3, 19.4]) {
+    for (const hr of [20.3]) {
       const base = new Date(now - d * 24 * H);
       const keyNow = dayKey(base);
       // approximate local wall time
@@ -593,21 +591,24 @@ function renderHeader() {
 }
 
 function renderBanner() {
-  const now = Date.now(), today = dayKey(now), slot = slotOf(now);
-  const done = STATE.checkins.filter(c => dayKey(c.ts) === today && (c.slot || slotOf(c.ts)) === slot);
-  const word = slot === "AM" ? "morning" : "evening";
+  const now = Date.now(), today = ciDay(now), h = hourOf(now);
+  const done = STATE.checkins.filter(c => ciDay(c.ts) === today);
   let html;
   if (STATE.checkinError) {
     html = `<section class="card"><div class="err">${esc(STATE.checkinError)}</div></section>`;
   } else if (done.length) {
     const last = done[done.length - 1];
     const t = fmt({ hour: "numeric", minute: "2-digit" }).format(new Date(last.ts));
-    html = `<section class="card banner done"><div class="msg"><span class="check">✓</span> Your ${word} check-in is done. Thank you!
-      <small>You checked in at ${t}. ${slot === "AM" ? "See you this evening." : "See you in the morning."}</small></div></section>`;
-  } else {
-    html = `<section class="card banner due"><div class="msg">Time for your ${word} check-in
-      <small>Six quick questions. It takes about 30 seconds.</small></div>
+    html = `<section class="card banner done"><div class="msg"><span class="check">✓</span> Today's check-in is done. Thank you!
+      <small>You checked in at ${t}. See you tomorrow evening.</small></div></section>`;
+  } else if (h >= CONFIG.checkinOpensHour || h < 4) {
+    html = `<section class="card banner due"><div class="msg">Time for tonight's check-in
+      <small>Six quick questions about your day. It takes about 30 seconds.</small></div>
       <button class="bigbtn" id="startBtn">Start check-in</button></section>`;
+  } else {
+    html = `<section class="card banner"><div class="msg">Your check-in is this evening
+      <small>You'll get a reminder around ${CONFIG.reminderTime}. Six quick questions about your day.</small></div>
+      <button class="linkbtn" id="startBtn">Or check in now</button></section>`;
   }
   $("bannerSlot").innerHTML = html;
   const b = $("startBtn"); if (b) b.onclick = openCheckin;
@@ -867,7 +868,7 @@ const valOf = (c, id) => id === "overall" ? (c.overall != null && c.overall !== 
 const mean = (arr) => arr.reduce((p, q) => p + q, 0) / arr.length;
 
 function computeTrends() {
-  const now = Date.now(), split = now - 3.5 * 24 * H, start = now - 8 * 24 * H, out = {};
+  const now = Date.now(), split = now - 4 * 24 * H, start = now - 8 * 24 * H, out = {};
   ["overall"].concat(QUESTIONS.map(q => q.id)).forEach(id => {
     const rec = STATE.checkins.filter(c => c.ts >= split).map(c => valOf(c, id)).filter(v => v >= 1 && v <= 5);
     const prev = STATE.checkins.filter(c => c.ts >= start && c.ts < split).map(c => valOf(c, id)).filter(v => v >= 1 && v <= 5);
@@ -923,16 +924,7 @@ function renderDoing() {
   if (good) items.push({ cls: "up", icon: "★", txt: `${GOOD_WORDS[good]} this week. Wonderful!` });
   if (!items.length && Object.keys(T).length) items.push({ cls: "flat", icon: "→", txt: "Things have held fairly steady over the past week." });
 
-  // Morning vs evening patterns (last two weeks)
-  const since = Date.now() - 14 * 24 * H;
-  QUESTIONS.map(q => {
-    const am = list.filter(c => c.ts >= since && (c.slot || slotOf(c.ts)) === "AM").map(c => Number(c[q.id])).filter(v => v >= 1);
-    const pm = list.filter(c => c.ts >= since && (c.slot || slotOf(c.ts)) === "PM").map(c => Number(c[q.id])).filter(v => v >= 1);
-    return (am.length >= 4 && pm.length >= 4) ? { id: q.id, d: mean(pm) - mean(am) } : null;
-  }).filter(o => o && Math.abs(o.d) >= 0.8).sort((p, q) => Math.abs(q.d) - Math.abs(p.d)).slice(0, 2)
-    .forEach(o => items.push({ cls: "pat", icon: o.d > 0 ? "☾" : "☀", txt: PATTERN[o.id](o.d > 0 ? "evening" : "morning", o.d > 0 ? "morning" : "evening") }));
-
-  if (!items.length) items.push({ cls: "flat", icon: "…", txt: "After a few more days of check-ins, you'll see here how things are trending." });
+  if (!items.length) items.push({ cls: "flat", icon: "…", txt: "After about a week of check-ins, you'll see here how things are trending." });
   $("trends").innerHTML = items.map(i => `<li><span class="ti ${i.cls}" aria-hidden="true">${i.icon}</span>${esc(i.txt)}</li>`).join("");
 }
 
@@ -950,48 +942,46 @@ function renderNote() {
    Render: 7-day feelings grid
    ========================================================= */
 function renderGrid() {
-  const now = Date.now(), days = [];
-  for (let i = 6; i >= 0; i--) days.push(dayKey(now - i * 24 * H));
-  const uniq = [...new Set(days)];
+  const now = Date.now(), today = ciDay(now), uniq = [];
+  for (let i = 6; i >= 0; i--) { const d = ciDay(now - i * 24 * H); if (!uniq.includes(d)) uniq.push(d); }
   while (uniq.length < 7) uniq.unshift(dayKey(Date.parse(uniq[0] + "T12:00:00") - 24 * H));
-  const today = dayKey(now);
   const cell = {};
-  STATE.checkins.forEach(c => { const k = dayKey(c.ts) + "|" + (c.slot || slotOf(c.ts)); cell[k] = c; });
+  STATE.checkins.forEach(c => { cell[ciDay(c.ts)] = c; });   // latest check-in of each day wins
 
-  let h = `<colgroup><col class="rowc">${"<col>".repeat(14)}</colgroup><thead><tr><th></th>`;
+  let h = `<colgroup><col class="rowc">${"<col>".repeat(7)}</colgroup><thead><tr><th></th>`;
   uniq.forEach(d => {
     const t = Date.parse(d + "T12:00:00");
     const lbl = d === today ? "Today" : new Date(t).toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" });
-    h += `<th colspan="2" class="${d === today ? "today" : ""}">${lbl}</th>`;
+    h += `<th class="${d === today ? "today" : ""}">${lbl}</th>`;
   });
-  h += `</tr><tr><th></th>` + uniq.map(() => `<th class="ampm">AM</th><th class="ampm">PM</th>`).join("") + `</tr></thead><tbody>`;
+  h += `</tr></thead><tbody>`;
   const rows = [{ id: "overall", short: "Overall" }].concat(QUESTIONS);
   rows.forEach(q => {
     h += `<tr class="${q.id === "overall" ? "overall" : ""}"><th class="rowh" scope="row">${q.short}</th>`;
-    uniq.forEach(d => ["AM", "PM"].forEach(sl => {
-      const c = cell[d + "|" + sl];
+    uniq.forEach(d => {
+      const c = cell[d];
       let v = c ? (q.id === "overall" ? (c.overall != null ? c.overall : overallOf(c)) : Number(c[q.id])) : null;
       if (v == null || isNaN(v) || v < 1) { h += `<td aria-label="no answer">·</td>`; return; }
       const col = scoreVar(v);
       const shown = q.id === "overall" ? v.toFixed(1).replace(/\.0$/, "") : v;
-      const title = `${d} ${sl} — ${q.short}: ${shown}${c.note ? " — " + c.note : ""}`;
+      const title = `${d} — ${q.short}: ${shown}${c.note ? " — " + c.note : ""}`;
       h += `<td style="background:${col.bg};color:${col.ink}" title="${esc(title)}">${shown}</td>`;
-    }));
+    });
     h += `</tr>`;
   });
   $("feel").innerHTML = h + `</tbody>`;
   const gw = document.querySelector(".gridwrap"); gw.scrollLeft = gw.scrollWidth;   // show today first on small screens
 
-  // Plain-language summary
-  const week = STATE.checkins.filter(c => uniq.includes(dayKey(c.ts)));
+  // Plain-language summary (one check-in per day)
+  const week = uniq.map(d => cell[d]).filter(Boolean);
   if (!week.length) { $("weeksum").textContent = "No check-ins yet this week. Your first one will show up here."; }
   else {
     const withO = week.map(c => Object.assign({ o: c.overall != null ? c.overall : overallOf(c) }, c));
     const avg = withO.reduce((a, c) => a + c.o, 0) / withO.length;
     const best = withO.reduce((a, c) => c.o > a.o ? c : a), worst = withO.reduce((a, c) => c.o < a.o ? c : a);
-    const lbl = (c) => `${fmt({ weekday: "long" }).format(new Date(c.ts))} ${(c.slot || slotOf(c.ts)) === "AM" ? "morning" : "evening"}`;
-    $("weeksum").innerHTML = `This week you averaged <b>${avg.toFixed(1)} out of 5</b> (${SCORE_WORDS[Math.round(avg)].toLowerCase()}) over ${week.length} check-in${week.length > 1 ? "s" : ""}.` +
-      (withO.length > 1 && best.o !== worst.o ? ` Best: <b>${lbl(best)}</b>. Hardest: <b>${lbl(worst)}</b>.` : "");
+    const lbl = (c) => fmt({ weekday: "long" }).format(new Date(c.ts - 4 * H));
+    $("weeksum").innerHTML = `This week you averaged <b>${avg.toFixed(1)} out of 5</b> (${SCORE_WORDS[Math.round(avg)].toLowerCase()}) over ${week.length} day${week.length > 1 ? "s" : ""}.` +
+      (withO.length > 1 && best.o !== worst.o ? ` Best day: <b>${lbl(best)}</b>. Hardest: <b>${lbl(worst)}</b>.` : "");
   }
   $("scale").innerHTML = "Scale: " + [1, 2, 3, 4, 5].map(n => `<span><span class="k" style="background:var(--s${n});color:var(--s${n}-ink)">${n}</span>${SCORE_WORDS[n]}</span>`).join("") +
     `<span style="margin-left:6px">· a dot means no check-in</span>`;
@@ -1017,7 +1007,7 @@ function drawStep() {
   if (CI.step < QUESTIONS.length) {
     const q = QUESTIONS[CI.step], picked = CI.answers[q.id];
     if (document.activeElement) document.activeElement.blur();
-    ov.innerHTML = top + `<div class="qstep"><div class="q">${q.q}</div><div class="qsub">${q.sub}</div>
+    ov.innerHTML = top + `<div class="qstep"><div class="eyebrow">Thinking about today as a whole</div><div class="q">${q.q}</div><div class="qsub">${q.sub}</div>
       ${q.scale ? `<div class="scalenote"><span><b style="background:var(--s1);color:var(--s1-ink)">1</b>${q.scale[0]}</span><span><b style="background:var(--s5);color:var(--s5-ink)">5</b>${q.scale[1]}</span></div>` : ""}
       <div class="choices" role="group" aria-label="${esc(q.q)}">` +
       q.labels.map((w, i) => { const n = i + 1, col = scoreVar(n);
@@ -1029,10 +1019,9 @@ function drawStep() {
     ov.querySelectorAll(".choice").forEach(b => b.onclick = () => pick(Number(b.dataset.n)));
     if (lastInputWasKey) { const first = ov.querySelector(".choice"); if (first) first.focus({ preventScroll: true }); }
   } else if (CI.step === QUESTIONS.length) {
-    const sl = slotOf(Date.now());
-    ov.innerHTML = top + `<div class="qstep"><div class="q">${NOTE_PROMPT[sl][0]}</div>
-      <div class="qsub">${NOTE_PROMPT[sl][1]}</div>
-      <div class="chips">` + NOTE_CHIPS[sl].map(c => `<button class="chip${CI.chips.has(c) ? " on" : ""}" data-c="${esc(c)}">${c}</button>`).join("") + `</div>
+    ov.innerHTML = top + `<div class="qstep"><div class="q">${NOTE_PROMPT[0]}</div>
+      <div class="qsub">${NOTE_PROMPT[1]}</div>
+      <div class="chips">` + NOTE_CHIPS.map(c => `<button class="chip${CI.chips.has(c) ? " on" : ""}" data-c="${esc(c)}">${c}</button>`).join("") + `</div>
       <textarea class="note" id="noteBox" rows="7" placeholder="Type here if you like…">${esc(CI.note)}</textarea></div>
       <div class="ov-nav"><button class="backbtn" id="backBtn">← Back</button>
       <button class="bigbtn" id="saveBtn">Save my check-in</button></div>`;
@@ -1076,62 +1065,36 @@ async function submitCheckin() {
   $("doneBtn").onclick = () => { closeCheckin(); refresh(); };
   $("doneBtn").focus();
 }
-/* ---- Post check-in encouragement: always warm, never a grade; morning vs evening ---- */
+/* ---- Post check-in encouragement: always warm, never a grade; one nightly check-in ---- */
 const CHEER = {
-  AM: {
-    great: ["What a lovely way to start the day! Enjoy every bit of it.",
-            "You're starting the day strong. Make the most of it!",
-            "A great morning! Here's hoping the whole day follows suit."],
-    good:  ["A good start to the day. That's worth smiling about.",
-            "Nice and steady this morning. Well done.",
-            "That's a solid morning. Here's to a good day ahead."],
-    mid:   ["An in-between morning, and you showed up for it. That counts.",
-            "Some mornings are slow to warm up. The day is still young.",
-            "Not every morning starts great, and that's okay. Thank you for checking in."],
-    low:   ["A rough start, and you checked in anyway. That takes grit.",
-            "Thank you for checking in on a tough morning. Go easy on yourself today.",
-            "Hard mornings happen. Take today one gentle step at a time."]
-  },
-  PM: {
-    great: ["What a wonderful day! Rest well tonight.",
-            "Ending the day on a high note. Sleep well!",
-            "You had a great day, and that's so good to see."],
-    good:  ["A good day, and that's worth celebrating.",
-            "Nice! Steady and strong today. Rest up tonight.",
-            "That's a solid day. Well done, you."],
-    mid:   ["An in-between day, and you got through it. That counts.",
-            "Not every day is a great one, and that's okay. Rest well tonight.",
-            "Middle-of-the-road days are part of the picture too. Thanks for writing it down."],
-    low:   ["A hard day, and you checked in anyway. That takes grit.",
-            "Thank you for checking in after a tough day. Tomorrow is a brand-new start.",
-            "Be gentle with yourself tonight. A good rest can make a real difference."]
-  }
+  great: ["What a wonderful day! Rest well tonight.",
+          "Ending the day on a high note. Sleep well!",
+          "You had a great day, and that's so good to see."],
+  good:  ["A good day, and that's worth celebrating.",
+          "Nice! Steady and strong today. Rest up tonight.",
+          "That's a solid day. Well done, you."],
+  mid:   ["An in-between day, and you got through it. That counts.",
+          "Not every day is a great one, and that's okay. Rest well tonight.",
+          "Middle-of-the-road days are part of the picture too. Thanks for writing it down."],
+  low:   ["A hard day, and you checked in anyway. That takes grit.",
+          "Thank you for checking in after a tough day. Tomorrow is a brand-new start.",
+          "Be gentle with yourself tonight. A good rest can make a real difference."]
 };
-const HEADLINES = {
-  AM: ["Morning check-in done!", "Good morning, and thank you!", "Thank you! Morning check-in saved."],
-  PM: ["Evening check-in done!", "Thank you! Evening check-in saved.", "All set for tonight. Thank you!"]
-};
-const LOW_TIP = {
-  AM: "Take your time getting up, and keep a hand on something steady.",
-  PM: "Take it slow tonight, and keep a hand on something steady. A night light helps too."
-};
+const HEADLINES = ["Tonight's check-in is done!", "Thank you! Today is saved.", "All set for tonight. Thank you!"];
+const LOW_TIP = "Take it slow tonight, and keep a hand on something steady. A night light helps too.";
 const pickOne = (a) => a[Math.floor(Math.random() * a.length)];
-function ordinal(n) { const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
 
 function encouragement(avg, prior) {
-  const now = Date.now(), slot = slotOf(now);
+  const now = Date.now(), today = ciDay(now);
   const band = avg >= 4.5 ? "great" : avg >= 3.5 ? "good" : avg >= 2.5 ? "mid" : "low";
-  const lines = [pickOne(CHEER[slot][band])];
+  const lines = [pickOne(CHEER[band])];
 
-  // Only ever compare upward, and name the last check-in naturally
+  // Only ever compare upward
   const last = prior.length ? prior[prior.length - 1] : null;
   const lastO = last ? (last.overall != null ? last.overall : overallOf(last)) : null;
   if (lastO != null) {
-    const lastSlot = last.slot || slotOf(last.ts);
-    const sameDay = dayKey(last.ts) === dayKey(now), yesterday = dayKey(last.ts) === dayKey(now - 24 * H);
-    const when = sameDay && lastSlot === "AM" && slot === "PM" ? "this morning"
-      : yesterday && lastSlot === "PM" && slot === "AM" ? "last night"
-      : "your last check-in";
+    const ld = ciDay(last.ts);
+    const when = ld === today ? "earlier today" : ld === ciDay(now - 24 * H) ? "yesterday" : "your last check-in";
     if (avg >= lastO + 0.5) lines.push(`That's better than ${when}!`);
     else if ((band === "great" || band === "good") && Math.abs(avg - lastO) < 0.5) lines.push(`Holding steady since ${when}. Nice.`);
   }
@@ -1141,16 +1104,18 @@ function encouragement(avg, prior) {
   if (P && (band === "low" || band === "mid")) {
     const d3 = P.current - interp(P.series, now - 3 * H), d24 = P.current - interp(P.series, now - 24 * H);
     if (Math.abs(d3) >= CONFIG.fastAtOrAbove || Math.abs(d24) >= CONFIG.bigSwing24h)
-      lines.push(`The air pressure has been ${d24 < 0 ? "dropping" : "climbing"} quite a bit ${slot === "AM" ? "since yesterday" : "today"}. This check-in helps us see whether the weather is part of it.`);
+      lines.push(`The air pressure has been ${d24 < 0 ? "dropping" : "climbing"} quite a bit today. This check-in helps us see whether the weather is part of it.`);
   }
-  if (band === "low") lines.push(LOW_TIP[slot]);
+  if (band === "low") lines.push(LOW_TIP);
 
-  // Progress + see-you-next
-  const thisWeek = prior.filter(c => c.ts >= now - 7 * 24 * H).length + 1;
-  const progress = thisWeek === 1 ? "First check-in of the week. Great start!"
-    : `That's your ${ordinal(thisWeek)} check-in this week. Every one makes the picture clearer.`;
-  lines.push(progress + (slot === "AM" ? " See you this evening!" : " See you in the morning!"));
-  return { headline: pickOne(HEADLINES[slot]), lines };
+  // Progress: a streak of days in a row, or days this week
+  const days = new Set(prior.map(c => ciDay(c.ts))); days.add(today);
+  let streak = 0; while (days.has(ciDay(now - streak * 24 * H))) streak++;
+  const week = [...Array(7).keys()].filter(i => days.has(ciDay(now - i * 24 * H))).length;
+  const progress = streak >= 2 ? `That's ${streak} days in a row!`
+    : week > 1 ? `You've checked in ${week} of the last 7 days.` : "Your first check-in this week. Great start!";
+  lines.push(progress + " Every one makes the picture clearer. See you tomorrow evening!");
+  return { headline: pickOne(HEADLINES), lines };
 }
 
 document.addEventListener("keydown", (e) => {
